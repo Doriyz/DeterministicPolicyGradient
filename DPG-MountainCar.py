@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Normal
-
 import gym
 from tqdm import tqdm_notebook
 import numpy as np
@@ -148,14 +147,12 @@ def update(batch, state_mean, state_std):
         V.weight_value = V.weight_value.detach() + learningRate_value * weight_value_update
 
 def draw_result(scores, policy_scores):
-    sns.set()
-
     plt.plot(scores, color='green', label='Training score')
-    plt.plot(policy_scores, color='blue', label='Policy score')
+    plt.plot(policy_scores, color='red', label='Policy score')
     plt.ylabel('score')
     plt.xlabel('episodes')
-    plt.title('Score history of MountainCarContinuous with COPDAC-Q')
-    plt.legend('upper left')
+    plt.title('COPDAC-Q')
+    plt.legend(prop={'size': 12},bbox_to_anchor=(1, 0.6))
     plt.show()
 
 
@@ -169,52 +166,40 @@ def train():
     learningRate_value = 0.03 # 状态价值函数的学习率
     learningRate_Q = 0.03 # 动作价值函数的学习率
     BATCH_SIZE = 8 # 每次训练的批次大小
-
-
     # 构建环境
     env = gym.make('MountainCarContinuous-v0').env
     env2 = deepcopy(env)
-
     # 设置环境参数
     obs_space = env.observation_space.shape[0]
     action_space = env.action_space.shape[0]
-
     # 设置随机种子
     np.random.seed(0)
     random.seed(0)
     env.seed(0)
     torch.manual_seed(0)
-
     # 初始化权重向量
     stdv = 1 / np.sqrt(obs_space)
     weight_policy = torch.Tensor(np.random.uniform(low=-stdv, high=stdv, size=(obs_space, action_space)) * 0.03)
     weight_policy.requires_grad = True
     weight_Q = torch.Tensor(np.random.uniform(low=-stdv, high=stdv, size=(obs_space, 1)) * 0.03)
     weight_value = torch.Tensor(np.random.uniform(low=-stdv, high=stdv, size=(obs_space, 1)) * 0.03)
-
     # 初始化策略，状态价值函数，动作价值函数
     Policy = DeterministicPolicy(weight_policy)
     Q = QFunction(weight_Q)
     V = ValueFunction(weight_value)
-
     # 初始化经验池
     samples = np.array([env.observation_space.sample() for _ in range(10000)])
     state_mean = np.mean(samples, axis = 0)
     state_std = np.std(samples, axis= 0) + 1.0e-6
-
-
     # 记录每次训练的分数
     scores = []
-
     # 记录每次训练的策略分数
     policy_scores = []
-
     # 统计更新次数
     update_count = 0
-
     # 经验回放的缓冲区：大小为8000的双端队列
     replay_buffer = deque(maxlen=8000)
-
+    
     for episode in tqdm_notebook(range(NUM_EPISODES)):
         
         state = env.reset()
@@ -255,20 +240,16 @@ def train():
             state = new_state
         
         # 记录每次训练的分数
-        scores.append(score)
-        
+        scores.append(score)        
         # 测试当前得到的策略
         for step in range(MAX_STEPS):
-
             state2 = normalizeState(state2, state_mean, state_std) # 状态归一化
             state_tensor2 = torch.from_numpy(state2).float().unsqueeze(1) # 将状态转换为张量
             action2 = Policy(state_tensor2) # 获取策略中状态对应的动作
             new_state2, reward2, done2, _ = env2.step([action2.item()]) # 执行动作
-            score2 += reward2 # 累加分数
-            
+            score2 += reward2 # 累加分数            
             if done2:
-                break
-                
+                break                
             state2 = new_state2
         
     testing_scores = []
@@ -281,12 +262,9 @@ def train():
             state = normalizeState(state, state_mean, state_std)
             state_tensor = torch.from_numpy(state).float().unsqueeze(1)
             action = Policy(state_tensor)
-            new_state, reward, done, info = env.step([action.sample()])
-            
-            score += reward
-            
-            state = new_state
-            
+            new_state, reward, done, info = env.step([action.sample()])            
+            score += reward            
+            state = new_state            
             if done:
                 break
         testing_scores.append(score)
@@ -294,8 +272,7 @@ def train():
     print('The mean score of testing is:')
     print(np.array(testing_scores).mean())
     print('The variance of testing is:')
-    print(np.array(testing_scores).var())
-            
+    print(np.array(testing_scores).var())            
     policy_scores.append(score2) # 记录每次训练的策略分数
     draw_result(scores, policy_scores) # 绘制训练过程中的分数变化图
     
